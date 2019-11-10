@@ -1,0 +1,19 @@
+[package]
+name = "trav_cbor"
+version = "0.1.0"
+authors = ["travers"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+# opt-level = 3
+# debug = false
+# rpath = false
+lto = true
+# debug-assertions = false
+# codegen-units = 16
+# panic = 'unwind'
+# incremental = false
+overflow-checks = true
