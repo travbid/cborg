@@ -1,5 +1,6 @@
 # CBORG
-An alternative CBOR parser for Rust if for some reason you don't want to use serde.
+A [CBOR](https://cbor.io/) parser for Rust.
 
-[![pipeline status](https://gitlab.com/travbid/cborg/badges/dev/pipeline.svg)](https://gitlab.com/travbid/cborg/commits/dev)
-[![coverage report](https://gitlab.com/travbid/cborg/badges/dev/coverage.svg)](https://gitlab.com/travbid/cborg/commits/dev)
+Incomplete and built for my own use-case. You probably want [serde_cbor](https://crates.io/crates/serde_cbor)
+
+[![pipeline status](https://gitlab.com/travbid/cborg/badges/master/pipeline.svg)](https://gitlab.com/travbid/cborg/commits/master)
