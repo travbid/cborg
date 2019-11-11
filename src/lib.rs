@@ -11,6 +11,29 @@ pub use value::Value;
 
 pub type Result<T> = result::Result<T, CborError>;
 
+pub enum ErrorKind {
+	UnexpectedValue,
+	InsufficientBytes,
+}
+
+impl fmt::Debug for ErrorKind {
+	fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
+		match self {
+			ErrorKind::UnexpectedValue => f.write_str("Unexpected value"),
+			ErrorKind::InsufficientBytes => f.write_str("Insufficient bytes"),
+		}
+	}
+}
+
+impl fmt::Display for ErrorKind {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			ErrorKind::UnexpectedValue => write!(fmt, "Unexpected value"),
+			ErrorKind::InsufficientBytes => write!(fmt, "Insufficient bytes"),
+		}
+	}
+}
+
 #[derive(Debug)]
 pub struct CborError {
 	kind: ErrorKind,
@@ -27,21 +50,9 @@ impl CborError {
 	}
 }
 
-impl fmt::Debug for ErrorKind {
-	fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
-		match self {
-			ErrorKind::UnexpectedValue => f.write_str("Unexpected value"),
-			ErrorKind::InsufficientBytes => f.write_str("Insufficient bytes"),
-		}
-	}
-}
-
 impl fmt::Display for CborError {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		match self.kind {
-			ErrorKind::UnexpectedValue => write!(fmt, "Unexpected value"),
-			ErrorKind::InsufficientBytes => write!(fmt, "Insufficient bytes"),
-		}
+		self.kind.fmt(fmt)
 	}
 }
 
@@ -55,11 +66,6 @@ impl error::Error for CborError {
 	fn cause(&self) -> Option<&dyn error::Error> {
 		None
 	}
-}
-
-pub enum ErrorKind {
-	UnexpectedValue,
-	InsufficientBytes,
 }
 
 fn read_type(b: u8) -> (u8, u8) {

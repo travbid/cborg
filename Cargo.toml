@@ -1,13 +1,15 @@
 [package]
-name = "trav_cbor"
-version = "0.1.0"
-authors = ["travers"]
-edition = "2018"
+name = "cborg"
+version = "0.1.1"
+authors = ["Travers Biddle <traversbiddle@gmail.com>"]
 license = "MIT"
+description = "A CBOR parser"
+repository = "https://gitlab.com/travbid/cborg"
+edition = "2018"
 
 [dependencies]
 
-[profile.release]
+[profile.release] # Default options commented out
 # opt-level = 3
 # debug = false
 # rpath = false

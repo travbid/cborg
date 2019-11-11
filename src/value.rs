@@ -256,21 +256,20 @@ impl Value {
 				length_code = len as u8;
 				let b: u8 = (item_code << 5) | length_code;
 				bytes.push(b);
-			},
+			}
 			24..=0xFF => {
 				length_code = 24;
 				let b: u8 = (item_code << 5) | length_code;
 				bytes.push(b);
 				bytes.push(len as u8);
-			},
+			}
 			0x100..=0xFFFF => {
 				length_code = 25;
 				let b: u8 = (item_code << 5) | length_code;
 				bytes.push(b);
 				bytes.push((len >> 8) as u8);
 				bytes.push(len as u8);
-				
-			},
+			}
 			0x1_0000..=0xFFFF_FFFF => {
 				length_code = 26;
 				let b: u8 = (item_code << 5) | length_code;
@@ -289,21 +288,6 @@ impl Value {
 				bytes.push(len as u8);
 			}
 		};
-				
-
-		// if len <= 23 {
-		// 	length_code = len as u8;
-		// } else if len <= 0xFF {
-		// 	length_code = 24;
-		// } else if len <= 0xFFFF {
-		// 	length_code = 25;
-		// } else if len <= 0xFFFF_FFFF {
-		// 	length_code = 26;
-		// } else {
-		// 	length_code = 27;
-		// }
-		// let b: u8 = (item_code << 5) | length_code;
-		// bytes.push(b);
 	}
 
 	fn add_bytes(bytes: &mut Vec<u8>, x: &[u8], item_code: u8) {
@@ -379,9 +363,11 @@ fn print_cbor_padded<W: io::Write>(val: &Value, indent: usize, w: &mut W) -> io:
 		Value::Unsigned(x) => write!(w, "{}", x),
 		Value::Negative(x) => write!(w, "{}", x),
 		Value::ByteString(ref x) => {
-			if x.is_empty() { w.write_all(b"[]")?; }
-			else if x.len() == 1 { write!(w, "[ {} ]", x[0])?; }
-			else {
+			if x.is_empty() {
+				w.write_all(b"[]")?;
+			} else if x.len() == 1 {
+				write!(w, "[ {} ]", x[0])?;
+			} else {
 				w.write_all(b"[")?;
 				write!(w, "{}", x[0])?;
 				for y in x.iter().skip(1) {
