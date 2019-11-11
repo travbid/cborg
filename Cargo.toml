@@ -1,13 +1,13 @@
 [package]
-name = "trav_cbor"
+name = "cborg"
 version = "0.1.0"
-authors = ["travers"]
+authors = ["Travers Biddle <traversbiddle@gmail.com>"]
 edition = "2018"
 license = "MIT"
 
 [dependencies]
 
-[profile.release]
+[profile.release] # Default options commented out
 # opt-level = 3
 # debug = false
 # rpath = false
