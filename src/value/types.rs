@@ -1,6 +1,5 @@
-use std;
+use core::fmt;
 use std::collections::HashMap;
-use std::fmt;
 use std::io;
 
 #[derive(Clone, PartialEq, Hash)]
@@ -165,7 +164,7 @@ impl Value {
 		}
 	}
 
-	pub fn get_int(&self) -> Option<i64> {
+	pub fn get_neg(&self) -> Option<i64> {
 		match self {
 			Value::Negative(x) => Some(*x),
 			_ => None,
