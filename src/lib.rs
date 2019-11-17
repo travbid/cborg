@@ -1,16 +1,17 @@
 pub mod value;
 
+use core::fmt;
+use core::iter::Iterator;
+use core::result;
 use std::error;
-use std::fmt;
-use std::iter::Iterator;
-use std::result;
 
+pub use value::FromValue;
 pub use value::KeyVal;
 pub use value::Simple;
 pub use value::Value;
+pub use value::ValueInto;
 
 pub type Result<T> = result::Result<T, CborError>;
-
 pub enum ErrorKind {
 	UnexpectedValue,
 	InsufficientBytes,
@@ -302,35 +303,62 @@ fn decode_element<'a, I: Iterator<Item = &'a u8>>(iter: &mut I) -> Result<Value>
 	parse_value(iter, type_byte)
 }
 
-pub fn decode_iter<'a, I: Iterator<Item = &'a u8>>(iter: &mut I) -> Result<Vec<Value>> {
-	let mut items = Vec::<Value>::new();
-	loop {
-		let type_byte: u8 = match iter.next() {
-			Some(x) => *x,
-			None => return Ok(items),
-		};
-		let item = parse_value(iter, type_byte)?;
-		items.push(item);
-	}
+pub fn decode_iter<'a, I: Iterator<Item = &'a u8>>(iter: &mut I) -> Result<Value> {
+	let type_byte: u8 = match iter.next() {
+		Some(x) => *x,
+		None => return Err(CborError::new(ErrorKind::InsufficientBytes, "".into())),
+	};
+
+	parse_value(iter, type_byte)
 }
 
-pub fn decode<'a, I: IntoIterator<Item = &'a u8>>(stream: I) -> Result<Vec<Value>> {
+pub fn decode<'a, I: IntoIterator<Item = &'a u8>>(stream: I) -> Result<Value> {
 	let mut iter = stream.into_iter();
 	decode_iter(&mut iter)
 }
 
-pub fn decode_slice(bytes: &[u8]) -> Result<Vec<Value>> {
-	let mut v = Vec::<u8>::new();
-	for b in bytes {
-		v.push(b.clone());
-	}
-	decode(&v)
+pub fn decode_slice(bytes: &[u8]) -> Result<Value> {
+	decode_iter(&mut bytes.iter())
+}
+
+/// Decode a given IntoIterator into a given object.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use std::collections::HashMap;
+/// let bytes = &[0b1010_0010, 0b0011_1000, 0b0001_1000, 0b0110_0011, 0x61, 0x62, 0x63,
+///               0b0000_0111, 0b0110_0011, 0x44, 0x45, 0x46];
+/// let map: HashMap<i8, String> = cborg::decode_to(bytes).unwrap().unwrap();
+/// assert_eq!("abc", map[&-25]);
+/// assert_eq!("DEF", map[&7]);
+/// ```
+/// ```
+/// let bytes = &[0b1000_0011, 11, 22, 0b0001_1000, 33];
+/// let array: Vec<u32> = cborg::decode_to(bytes).unwrap().unwrap();
+/// assert_eq!(11, array[0]);
+/// assert_eq!(22, array[1]);
+/// assert_eq!(33, array[2]);
+/// ```
+pub fn decode_to<'a, T, I>(stream: I) -> Result<Option<T>>
+where
+	T: FromValue,
+	I: IntoIterator<Item = &'a u8>,
+{
+	let mut iter = stream.into_iter();
+	let v: Value = decode_iter(&mut iter)?;
+	Ok(T::from_value(v))
 }
 
 #[cfg(test)]
 mod tests {
-	use crate::value::KeyVal;
-	use crate::value::Value;
+	use crate::KeyVal;
+	use crate::Value;
+	use crate::ValueInto;
+	use core::fmt::Write;
+	use std::collections::BTreeMap;
 	use std::collections::HashMap;
 
 	const LONG_STRING: &str = "This line is greater than 256 characters to test if lengths are encoded correctly after the major. This line is greater than 256 characters to test if lengths are encoded correctly after the major. This line is greater than 256 characters to test if lengths are encoded correctly after the major.";
@@ -420,7 +448,7 @@ mod tests {
 			let v: Vec<u8> = test_data.to_vec();
 			let data = crate::decode(&v).unwrap();
 
-			let map: HashMap<Value, Value> = match data[0].get_hash_map() {
+			let map: HashMap<Value, Value> = match data.get_hash_map() {
 				Some(x) => x,
 				None => panic!("get_map returned None"),
 			}; //.expect("get_map returned None");
@@ -444,7 +472,7 @@ mod tests {
 				.get_uint()
 				.expect("get_uint returned None");
 			let negative: i64 = map_inner[&Value::Utf8String("negative".to_string())]
-				.get_int()
+				.get_neg()
 				.expect("get_int returned None");
 			assert!(2.49 < float && float < 2.51);
 			assert_eq!(bytestring, vec! {1,2,3,4,5});
@@ -527,11 +555,9 @@ mod tests {
 
 	#[test]
 	fn display_test() {
-		use std::fmt::Write;
-
 		let data = crate::decode_slice(&TEST_DATA_INDEFINITE).unwrap();
 		let mut out = String::new();
-		write!(out, "{}", &data[0]).expect("Could not fmt CBOR");
+		write!(out, "{}", &data).expect("Could not fmt CBOR");
 		assert_eq!(
 			out,
 			r#"{
@@ -550,5 +576,84 @@ mod tests {
    ],
 }"#
 		);
+	}
+
+	#[test]
+	#[allow(clippy::float_cmp)]
+	fn type_test() {
+		let v = crate::decode(TEST_DATA_DEFINITE.iter()).unwrap();
+		let utf8_key = "utf8string";
+		let utf8_val = "你好，世界 - hello, world";
+		let longstring = "long string";
+
+		let dict: HashMap<u64, HashMap<String, String>> = ValueInto::to_type(&v).unwrap();
+		assert_eq!(1, dict.len());
+		assert!(dict.contains_key(&555));
+		let map2 = dict.get(&555).unwrap();
+		assert_eq!(2, map2.len());
+		let val = map2.get(utf8_key).unwrap();
+		assert_eq!(utf8_val, val);
+
+		let dict: BTreeMap<i64, HashMap<String, String>> = ValueInto::to_type(&v).unwrap();
+		assert_eq!(1, dict.len());
+		assert!(dict.contains_key(&555));
+		let map2 = dict.get(&555).unwrap();
+		assert_eq!(2, map2.len());
+		let val = map2.get(utf8_key).unwrap();
+		assert_eq!(utf8_val, val);
+
+		let dict: BTreeMap<i64, Vec<i64>> = ValueInto::to_type(&v).unwrap();
+		let arr = dict.get(&777).unwrap();
+		assert_eq!(2, arr.len());
+		assert_eq!(11, arr[0]);
+		assert_eq!(-22, arr[1]);
+
+		let dict: BTreeMap<i64, Vec<f64>> = ValueInto::to_type(&v).unwrap();
+		let arr = dict.get(&777).unwrap();
+		assert_eq!(3, arr.len());
+		assert_eq!(11.0, arr[0]);
+		assert_eq!(-22.0, arr[1]);
+		assert_eq!(33.3, arr[2]);
+
+		let dict: BTreeMap<i64, Vec<Value>> = ValueInto::to_type(&v).unwrap();
+		let arr = dict.get(&777).unwrap();
+		assert_eq!(4, arr.len());
+		assert_eq!(11, arr[0].get_uint().unwrap());
+		assert_eq!(-22, arr[1].get_neg().unwrap());
+		assert_eq!(33.3, arr[2].get_float().unwrap());
+		assert_eq!("fourty-four", arr[3].get_string().unwrap());
+
+		let dict: Vec<(u64, BTreeMap<String, String>)> = ValueInto::into_type(v).unwrap();
+		assert_eq!(1, dict.len());
+		assert_eq!(2, dict[0].1.len());
+		assert_eq!(utf8_val, dict[0].1[utf8_key]);
+		assert!(dict[0].1[longstring].len() > 256);
+	}
+
+	#[test]
+	#[allow(clippy::float_cmp)]
+	fn decode_to_test() {
+		let utf8_key = "utf8string";
+		let utf8_val = "你好，世界 - hello, world";
+		let longstring = "long string";
+
+		let dict: HashMap<u64, HashMap<String, String>> = crate::decode_to(TEST_DATA_DEFINITE.iter())
+			.unwrap()
+			.unwrap();
+		assert_eq!(1, dict.len());
+		assert!(dict.contains_key(&555));
+		let map2 = dict.get(&555).unwrap();
+		assert_eq!(2, map2.len());
+		let val = map2.get(utf8_key).unwrap();
+		assert_eq!(utf8_val, val);
+		assert!(map2.get(longstring).unwrap().len() > 256);
+
+		let dict: BTreeMap<i64, Vec<i64>> = crate::decode_to(TEST_DATA_DEFINITE.iter())
+			.unwrap()
+			.unwrap();
+		let arr = dict.get(&777).unwrap();
+		assert_eq!(2, arr.len());
+		assert_eq!(11, arr[0]);
+		assert_eq!(-22, arr[1]);
 	}
 }
