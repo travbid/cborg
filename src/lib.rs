@@ -5,6 +5,7 @@ use core::iter::Iterator;
 use core::result;
 use std::error;
 
+pub use value::FromValue;
 pub use value::KeyVal;
 pub use value::Simple;
 pub use value::Value;
@@ -591,7 +592,7 @@ mod tests {
 		assert_eq!(33.3, arr[2].get_float().unwrap());
 		assert_eq!("fourty-four", arr[3].get_string().unwrap());
 
-		let dict: Vec<(u64, BTreeMap<String, String>)> = ValueInto::to_type(&v).unwrap();
+		let dict: Vec<(u64, BTreeMap<String, String>)> = ValueInto::into_type(v).unwrap();
 		assert_eq!(1, dict.len());
 		assert_eq!(2, dict[0].1.len());
 		assert_eq!(utf8_val, dict[0].1[utf8_key]);

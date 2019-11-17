@@ -8,32 +8,54 @@ pub use types::KeyVal;
 pub use types::Simple;
 pub use types::Value;
 
-pub trait ValueInto {
-	fn into_type(v: Value) -> Option<Self>
+pub trait ValueInto<T> {
+	fn into_type(self) -> Option<T>
 	where
 		Self: Sized;
 
-	fn to_type(v: &Value) -> Option<Self>
+	fn to_type(&self) -> Option<T>
 	where
 		Self: Sized;
 }
 
-impl ValueInto for Value {
-	fn into_type(v: Value) -> Option<Self> {
+pub trait FromValue {
+	fn from_value(v: Value) -> Option<Self>
+	where
+		Self: Sized;
+
+	fn from_ref(v: &Value) -> Option<Self>
+	where
+		Self: Sized;
+}
+
+impl FromValue for Value {
+	fn from_value(v: Value) -> Option<Self> {
 		Some(v)
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		Some(v.clone())
 	}
 }
 
-impl<K, V, S> ValueInto for HashMap<K, V, S>
+impl<U> ValueInto<U> for Value
 where
-	K: ValueInto + Eq + std::hash::Hash,
-	V: ValueInto + Eq,
+	U: FromValue,
+{
+	fn into_type(self) -> Option<U> {
+		U::from_value(self)
+	}
+	fn to_type(&self) -> Option<U> {
+		U::from_value(self.clone())
+	}
+}
+
+impl<K, V, S> FromValue for HashMap<K, V, S>
+where
+	K: FromValue + Eq + std::hash::Hash,
+	V: FromValue,
 	S: std::hash::BuildHasher + Default,
 {
-	fn into_type(v: Value) -> Option<Self> {
+	fn from_value(v: Value) -> Option<Self> {
 		let cmap: Vec<KeyVal> = match v {
 			Value::Map(x) => x,
 			_ => return None,
@@ -42,8 +64,8 @@ where
 		let mut m = HashMap::<K, V, S>::with_hasher(S::default());
 
 		for kv in cmap {
-			if let Some(k) = K::into_type(kv.key) {
-				if let Some(v) = V::into_type(kv.val) {
+			if let Some(k) = K::from_value(kv.key) {
+				if let Some(v) = V::from_value(kv.val) {
 					m.insert(k, v);
 				}
 			}
@@ -51,7 +73,8 @@ where
 
 		Some(m)
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+
+	fn from_ref(v: &Value) -> Option<Self> {
 		let cmap: &Vec<KeyVal> = match v {
 			Value::Map(x) => x,
 			_ => return None,
@@ -60,8 +83,8 @@ where
 		let mut m = HashMap::<K, V, S>::with_hasher(S::default());
 
 		for kv in cmap {
-			if let Some(k) = K::to_type(&kv.key) {
-				if let Some(v) = V::to_type(&kv.val) {
+			if let Some(k) = K::from_ref(&kv.key) {
+				if let Some(v) = V::from_ref(&kv.val) {
 					m.insert(k, v);
 				}
 			}
@@ -71,12 +94,12 @@ where
 	}
 }
 
-impl<K, V> ValueInto for BTreeMap<K, V>
+impl<K, V> FromValue for BTreeMap<K, V>
 where
-	K: ValueInto + std::cmp::Ord,
-	V: ValueInto,
+	K: FromValue + std::cmp::Ord,
+	V: FromValue,
 {
-	fn into_type(v: Value) -> Option<Self> {
+	fn from_value(v: Value) -> Option<Self> {
 		let cmap: Vec<KeyVal> = match v {
 			Value::Map(x) => x,
 			_ => return None,
@@ -85,8 +108,8 @@ where
 		let mut m = BTreeMap::<K, V>::new();
 
 		for kv in cmap {
-			if let Some(k) = K::into_type(kv.key) {
-				if let Some(v) = V::into_type(kv.val) {
+			if let Some(k) = K::from_value(kv.key) {
+				if let Some(v) = V::from_value(kv.val) {
 					m.insert(k, v);
 				}
 			}
@@ -94,7 +117,7 @@ where
 
 		Some(m)
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		let cmap: &Vec<KeyVal> = match v {
 			Value::Map(x) => x,
 			_ => return None,
@@ -103,8 +126,8 @@ where
 		let mut m = BTreeMap::<K, V>::new();
 
 		for kv in cmap {
-			if let Some(k) = K::to_type(&kv.key) {
-				if let Some(v) = V::to_type(&kv.val) {
+			if let Some(k) = K::from_ref(&kv.key) {
+				if let Some(v) = V::from_ref(&kv.val) {
 					m.insert(k, v);
 				}
 			}
@@ -115,8 +138,8 @@ where
 }
 
 // Needs specialization feature in Stable
-// impl ValueInto for u8 {
-// 	fn into_val(v: Value) -> Option<Self> {
+// impl FromValue for u8 {
+// 	fn from_value(v: Value) -> Option<Self> {
 // 		match v {
 // 			Value::Unsigned(x) => match u8::try_from(x) {
 // 				Ok(x) => Some(x),
@@ -131,17 +154,17 @@ where
 // 	}
 // }
 
-impl<T> ValueInto for Vec<T>
+impl<T> FromValue for Vec<T>
 where
-	T: ValueInto,
+	T: FromValue,
 {
-	fn into_type(v: Value) -> Option<Self> {
+	fn from_value(v: Value) -> Option<Self> {
 		let value_arr: Vec<Value> = match v {
 			Value::Array(x) => x,
 			Value::Map(m) => {
 				let mut arr = Vec::<T>::new();
 				for kv in m {
-					if let Some(x) = T::into_type(Value::Map(vec![kv.clone()])) {
+					if let Some(x) = T::from_value(Value::Map(vec![kv.clone()])) {
 						arr.push(x);
 					}
 				}
@@ -153,7 +176,7 @@ where
 		let mut arr = Vec::<T>::new();
 
 		for item in value_arr {
-			if let Some(x) = T::into_type(item) {
+			if let Some(x) = T::from_value(item) {
 				arr.push(x);
 			}
 		}
@@ -161,13 +184,13 @@ where
 		Some(arr)
 	}
 
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		let value_arr: &Vec<Value> = match v {
 			Value::Array(x) => x,
 			Value::Map(m) => {
 				let mut arr = Vec::<T>::new();
 				for kv in m {
-					if let Some(x) = T::into_type(Value::Map(vec![kv.clone()])) {
+					if let Some(x) = T::from_value(Value::Map(vec![kv.clone()])) {
 						arr.push(x);
 					}
 				}
@@ -179,7 +202,7 @@ where
 		let mut arr = Vec::<T>::new();
 
 		for item in value_arr {
-			if let Some(x) = T::to_type(item) {
+			if let Some(x) = T::from_ref(item) {
 				arr.push(x);
 			}
 		}
@@ -222,8 +245,8 @@ impl TryFrom<&Value> for u8 {
 	}
 }
 
-impl ValueInto for Vec<u8> {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for Vec<u8> {
+	fn from_value(v: Value) -> Option<Self> {
 		let value_arr: Vec<Value> = match v {
 			Value::ByteString(bs) => return Some(bs),
 			Value::Array(x) => x,
@@ -241,7 +264,7 @@ impl ValueInto for Vec<u8> {
 		Some(arr)
 	}
 
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		let value_arr: &Vec<Value> = match v {
 			Value::ByteString(bs) => return Some(bs.clone()),
 			Value::Array(x) => x,
@@ -260,12 +283,12 @@ impl ValueInto for Vec<u8> {
 	}
 }
 
-impl<K, V> ValueInto for (K, V)
+impl<K, V> FromValue for (K, V)
 where
-	K: ValueInto,
-	V: ValueInto,
+	K: FromValue,
+	V: FromValue,
 {
-	fn into_type(v: Value) -> Option<Self> {
+	fn from_value(v: Value) -> Option<Self> {
 		let tup: Vec<KeyVal> = match v {
 			Value::Map(m) => m,
 			_ => return None,
@@ -276,8 +299,8 @@ where
 		}
 
 		for kv in tup {
-			if let Some(k) = K::into_type(kv.key) {
-				if let Some(v) = V::into_type(kv.val) {
+			if let Some(k) = K::from_value(kv.key) {
+				if let Some(v) = V::from_value(kv.val) {
 					return Some((k, v));
 				}
 			}
@@ -286,7 +309,7 @@ where
 		None
 	}
 
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		let tup: &Vec<KeyVal> = match v {
 			Value::Map(m) => m,
 			_ => return None,
@@ -297,8 +320,8 @@ where
 		}
 
 		for kv in tup {
-			if let Some(k) = K::to_type(&kv.key) {
-				if let Some(v) = V::to_type(&kv.val) {
+			if let Some(k) = K::from_ref(&kv.key) {
+				if let Some(v) = V::from_ref(&kv.val) {
 					return Some((k, v));
 				}
 			}
@@ -308,8 +331,8 @@ where
 	}
 }
 
-impl ValueInto for u64 {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for u64 {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => Some(x),
 			Value::Negative(x) => match u64::try_from(x) {
@@ -319,7 +342,7 @@ impl ValueInto for u64 {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => Some(*x),
 			Value::Negative(x) => match u64::try_from(*x) {
@@ -331,8 +354,8 @@ impl ValueInto for u64 {
 	}
 }
 
-impl ValueInto for u32 {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for u32 {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match u32::try_from(x) {
 				Ok(x) => Some(x),
@@ -345,7 +368,7 @@ impl ValueInto for u32 {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match u32::try_from(*x) {
 				Ok(x) => Some(x),
@@ -360,8 +383,8 @@ impl ValueInto for u32 {
 	}
 }
 
-impl ValueInto for usize {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for usize {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match usize::try_from(x) {
 				Ok(x) => Some(x),
@@ -374,7 +397,7 @@ impl ValueInto for usize {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match usize::try_from(*x) {
 				Ok(x) => Some(x),
@@ -389,8 +412,8 @@ impl ValueInto for usize {
 	}
 }
 
-impl ValueInto for i64 {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for i64 {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match i64::try_from(x) {
 				Ok(x) => Some(x as i64),
@@ -400,7 +423,7 @@ impl ValueInto for i64 {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match i64::try_from(*x) {
 				Ok(x) => Some(x as i64),
@@ -412,8 +435,8 @@ impl ValueInto for i64 {
 	}
 }
 
-impl ValueInto for i32 {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for i32 {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match i32::try_from(x) {
 				Ok(x) => Some(x),
@@ -426,7 +449,7 @@ impl ValueInto for i32 {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match i32::try_from(*x) {
 				Ok(x) => Some(x),
@@ -441,8 +464,37 @@ impl ValueInto for i32 {
 	}
 }
 
-impl ValueInto for isize {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for i8 {
+	fn from_value(v: Value) -> Option<Self> {
+		match v {
+			Value::Unsigned(x) => match i8::try_from(x) {
+				Ok(x) => Some(x),
+				Err(_) => None,
+			},
+			Value::Negative(x) => match i8::try_from(x) {
+				Ok(x) => Some(x),
+				Err(_) => None,
+			},
+			_ => None,
+		}
+	}
+	fn from_ref(v: &Value) -> Option<Self> {
+		match v {
+			Value::Unsigned(x) => match i8::try_from(*x) {
+				Ok(x) => Some(x),
+				Err(_) => None,
+			},
+			Value::Negative(x) => match i8::try_from(*x) {
+				Ok(x) => Some(x),
+				Err(_) => None,
+			},
+			_ => None,
+		}
+	}
+}
+
+impl FromValue for isize {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match isize::try_from(x) {
 				Ok(x) => Some(x),
@@ -455,7 +507,7 @@ impl ValueInto for isize {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => match isize::try_from(*x) {
 				Ok(x) => Some(x),
@@ -470,8 +522,8 @@ impl ValueInto for isize {
 	}
 }
 
-impl ValueInto for f64 {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for f64 {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => Some(x as f64),
 			Value::Negative(x) => Some(x as f64),
@@ -479,7 +531,7 @@ impl ValueInto for f64 {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => Some(*x as f64),
 			Value::Negative(x) => Some(*x as f64),
@@ -489,8 +541,8 @@ impl ValueInto for f64 {
 	}
 }
 
-impl ValueInto for f32 {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for f32 {
+	fn from_value(v: Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => Some(x as f32),
 			Value::Negative(x) => Some(x as f32),
@@ -498,7 +550,7 @@ impl ValueInto for f32 {
 			_ => None,
 		}
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		match v {
 			Value::Unsigned(x) => Some(*x as f32),
 			Value::Negative(x) => Some(*x as f32),
@@ -508,11 +560,11 @@ impl ValueInto for f32 {
 	}
 }
 
-impl ValueInto for String {
-	fn into_type(v: Value) -> Option<Self> {
+impl FromValue for String {
+	fn from_value(v: Value) -> Option<Self> {
 		v.get_string()
 	}
-	fn to_type(v: &Value) -> Option<Self> {
+	fn from_ref(v: &Value) -> Option<Self> {
 		v.get_string()
 	}
 }
