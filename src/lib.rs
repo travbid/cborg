@@ -321,6 +321,37 @@ pub fn decode_slice(bytes: &[u8]) -> Result<Value> {
 	decode_iter(&mut bytes.iter())
 }
 
+/// Decode a given IntoIterator into a given object.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use std::collections::HashMap;
+/// let bytes = &[0b1010_0010, 0b0011_1000, 0b0001_1000, 0b0110_0011, 0x61, 0x62, 0x63,
+///               0b0000_0111, 0b0110_0011, 0x44, 0x45, 0x46];
+/// let map: HashMap<i8, String> = cborg::decode_to(bytes).unwrap().unwrap();
+/// assert_eq!("abc", map[&-25]);
+/// assert_eq!("DEF", map[&7]);
+/// ```
+/// ```
+/// let bytes = &[0b1000_0011, 11, 22, 0b0001_1000, 33];
+/// let array: Vec<u32> = cborg::decode_to(bytes).unwrap().unwrap();
+/// assert_eq!(11, array[0]);
+/// assert_eq!(22, array[1]);
+/// assert_eq!(33, array[2]);
+/// ```
+pub fn decode_to<'a, T, I>(stream: I) -> Result<Option<T>>
+where
+	T: FromValue,
+	I: IntoIterator<Item = &'a u8>,
+{
+	let mut iter = stream.into_iter();
+	let v: Value = decode_iter(&mut iter)?;
+	Ok(T::from_value(v))
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::KeyVal;
@@ -597,5 +628,32 @@ mod tests {
 		assert_eq!(2, dict[0].1.len());
 		assert_eq!(utf8_val, dict[0].1[utf8_key]);
 		assert!(dict[0].1[longstring].len() > 256);
+	}
+
+	#[test]
+	#[allow(clippy::float_cmp)]
+	fn decode_to_test() {
+		let utf8_key = "utf8string";
+		let utf8_val = "你好，世界 - hello, world";
+		let longstring = "long string";
+
+		let dict: HashMap<u64, HashMap<String, String>> = crate::decode_to(TEST_DATA_DEFINITE.iter())
+			.unwrap()
+			.unwrap();
+		assert_eq!(1, dict.len());
+		assert!(dict.contains_key(&555));
+		let map2 = dict.get(&555).unwrap();
+		assert_eq!(2, map2.len());
+		let val = map2.get(utf8_key).unwrap();
+		assert_eq!(utf8_val, val);
+		assert!(map2.get(longstring).unwrap().len() > 256);
+
+		let dict: BTreeMap<i64, Vec<i64>> = crate::decode_to(TEST_DATA_DEFINITE.iter())
+			.unwrap()
+			.unwrap();
+		let arr = dict.get(&777).unwrap();
+		assert_eq!(2, arr.len());
+		assert_eq!(11, arr[0]);
+		assert_eq!(-22, arr[1]);
 	}
 }
