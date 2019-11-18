@@ -341,9 +341,7 @@ impl Value {
 		bytes
 	}
 
-	pub fn encode(&self) -> Vec<u8> {
-		self.encode_compact()
-	}
+	pub fn encode(&self) -> Vec<u8> { self.encode_compact() }
 
 	// Possible future extension
 	// pub fn encode_preserving_types(&self) -> Vec<u8> {
