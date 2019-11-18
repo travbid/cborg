@@ -8,16 +8,6 @@ pub use types::KeyVal;
 pub use types::Simple;
 pub use types::Value;
 
-pub trait ValueInto<T> {
-	fn into_type(self) -> Option<T>
-	where
-		Self: Sized;
-
-	fn to_type(&self) -> Option<T>
-	where
-		Self: Sized;
-}
-
 pub trait FromValue {
 	fn from_value(v: Value) -> Option<Self>
 	where
@@ -29,24 +19,8 @@ pub trait FromValue {
 }
 
 impl FromValue for Value {
-	fn from_value(v: Value) -> Option<Self> {
-		Some(v)
-	}
-	fn from_ref(v: &Value) -> Option<Self> {
-		Some(v.clone())
-	}
-}
-
-impl<U> ValueInto<U> for Value
-where
-	U: FromValue,
-{
-	fn into_type(self) -> Option<U> {
-		U::from_value(self)
-	}
-	fn to_type(&self) -> Option<U> {
-		U::from_value(self.clone())
-	}
+	fn from_value(v: Value) -> Option<Self> { Some(v) }
+	fn from_ref(v: &Value) -> Option<Self> { Some(v.clone()) }
 }
 
 impl<K, V, S> FromValue for HashMap<K, V, S>
@@ -561,10 +535,248 @@ impl FromValue for f32 {
 }
 
 impl FromValue for String {
-	fn from_value(v: Value) -> Option<Self> {
-		v.get_string()
+	fn from_value(v: Value) -> Option<Self> { v.get_string() }
+	fn from_ref(v: &Value) -> Option<Self> { v.get_string() }
+}
+// -----------------------------------------------------------------------------
+pub trait ValueInto<T> {
+	fn into_type(self) -> Option<T>
+	where
+		Self: Sized;
+
+	fn to_type(&self) -> Option<T>
+	where
+		Self: Sized;
+}
+
+impl<U> ValueInto<U> for Value
+where
+	U: FromValue,
+{
+	fn into_type(self) -> Option<U> { U::from_value(self) }
+	fn to_type(&self) -> Option<U> { U::from_value(self.clone()) }
+}
+// -----------------------------------------------------------------------------
+pub trait ToValue {
+	fn to_value(&self) -> Value;
+}
+impl ToValue for Value {
+	fn to_value(&self) -> Value { self.clone() }
+}
+// impl ToValue for u8 {
+// 	fn to_value(&self) -> Value {
+// 		Value::Unsigned(u64::from(*self))
+// 	}
+// }
+impl ToValue for u32 {
+	fn to_value(&self) -> Value { Value::Unsigned(u64::from(*self)) }
+}
+impl ToValue for u64 {
+	fn to_value(&self) -> Value { Value::Unsigned(*self) }
+}
+impl ToValue for i8 {
+	fn to_value(&self) -> Value {
+		if *self < 0 {
+			Value::Negative(i64::from(*self))
+		} else {
+			Value::Unsigned(*self as u64)
+		}
 	}
-	fn from_ref(v: &Value) -> Option<Self> {
-		v.get_string()
+}
+impl ToValue for i32 {
+	fn to_value(&self) -> Value {
+		if *self < 0 {
+			Value::Negative(i64::from(*self))
+		} else {
+			Value::Unsigned(*self as u64)
+		}
+	}
+}
+impl ToValue for i64 {
+	fn to_value(&self) -> Value {
+		if *self < 0 {
+			Value::Negative(*self)
+		} else {
+			Value::Unsigned(*self as u64)
+		}
+	}
+}
+impl ToValue for Vec<u8> {
+	fn to_value(&self) -> Value { Value::ByteString(self.clone()) }
+}
+impl ToValue for String {
+	fn to_value(&self) -> Value { Value::Utf8String(self.clone()) }
+}
+impl ToValue for str {
+	fn to_value(&self) -> Value { Value::Utf8String(String::from(self)) }
+}
+impl<T> ToValue for Vec<T>
+where
+	T: ToValue,
+{
+	fn to_value(&self) -> Value {
+		let mut arr = Vec::<Value>::with_capacity(self.len());
+		for e in self {
+			arr.push(e.to_value());
+		}
+		Value::Array(arr)
+	}
+}
+impl<K, V, S> ToValue for HashMap<K, V, S>
+where
+	K: ToValue,
+	V: ToValue,
+{
+	fn to_value(&self) -> Value {
+		let mut v = Vec::<KeyVal>::new();
+		for entry in self {
+			let kv = KeyVal {
+				key: entry.0.to_value(),
+				val: entry.1.to_value(),
+			};
+			v.push(kv);
+		}
+		Value::Map(v)
+	}
+}
+
+impl<K, V> ToValue for BTreeMap<K, V>
+where
+	K: ToValue,
+	V: ToValue,
+{
+	fn to_value(&self) -> Value {
+		let mut v = Vec::<KeyVal>::new();
+		for entry in self {
+			let kv = KeyVal {
+				key: entry.0.to_value(),
+				val: entry.1.to_value(),
+			};
+			v.push(kv);
+		}
+		Value::Map(v)
+	}
+}
+impl ToValue for f32 {
+	fn to_value(&self) -> Value { Value::Float(*self as f64) }
+}
+impl ToValue for f64 {
+	fn to_value(&self) -> Value { Value::Float(*self) }
+}
+impl ToValue for bool {
+	fn to_value(&self) -> Value {
+		if *self {
+			Value::Simple(Simple::True)
+		} else {
+			Value::Simple(Simple::False)
+		}
+	}
+}
+// -----------------------------------------------------------------------------
+// impl From<u8> for Value {
+// 	fn from(i: u8) -> Value {
+// 		Value::Unsigned(u64::from(i))
+// 	}
+// }
+impl From<u32> for Value {
+	fn from(i: u32) -> Value { Value::Unsigned(u64::from(i)) }
+}
+impl From<u64> for Value {
+	fn from(i: u64) -> Value { Value::Unsigned(i) }
+}
+impl From<i8> for Value {
+	fn from(i: i8) -> Value {
+		if i < 0 {
+			Value::Negative(i64::from(i))
+		} else {
+			Value::Unsigned(i as u64)
+		}
+	}
+}
+impl From<i32> for Value {
+	fn from(i: i32) -> Value {
+		if i < 0 {
+			Value::Negative(i64::from(i))
+		} else {
+			Value::Unsigned(i as u64)
+		}
+	}
+}
+impl From<i64> for Value {
+	fn from(i: i64) -> Value {
+		if i < 0 {
+			Value::Negative(i)
+		} else {
+			Value::Unsigned(i as u64)
+		}
+	}
+}
+impl From<Vec<u8>> for Value {
+	fn from(v: Vec<u8>) -> Self { Value::ByteString(v) }
+}
+impl From<String> for Value {
+	fn from(s: String) -> Self { Value::Utf8String(s) }
+}
+impl<T> From<Vec<T>> for Value
+where
+	Value: From<T>,
+{
+	fn from(v: Vec<T>) -> Self {
+		let mut arr = Vec::<Value>::with_capacity(v.len());
+		for e in v {
+			arr.push(Value::from(e));
+		}
+		Value::Array(arr)
+	}
+}
+
+impl<K, V, S> From<HashMap<K, V, S>> for Value
+where
+	Value: From<K>,
+	Value: From<V>,
+{
+	fn from(map: HashMap<K, V, S>) -> Self {
+		let mut v = Vec::<KeyVal>::new();
+		for entry in map {
+			let kv = KeyVal {
+				key: Value::from(entry.0),
+				val: Value::from(entry.1),
+			};
+			v.push(kv);
+		}
+		Value::Map(v)
+	}
+}
+
+impl<K, V> From<BTreeMap<K, V>> for Value
+where
+	Value: From<K>,
+	Value: From<V>,
+{
+	fn from(map: BTreeMap<K, V>) -> Self {
+		let mut v = Vec::<KeyVal>::new();
+		for entry in map {
+			let kv = KeyVal {
+				key: Value::from(entry.0),
+				val: Value::from(entry.1),
+			};
+			v.push(kv);
+		}
+		Value::Map(v)
+	}
+}
+impl From<f32> for Value {
+	fn from(i: f32) -> Value { Value::Float(i as f64) }
+}
+impl From<f64> for Value {
+	fn from(i: f64) -> Value { Value::Float(i) }
+}
+impl From<bool> for Value {
+	fn from(i: bool) -> Value {
+		if i {
+			Value::Simple(Simple::True)
+		} else {
+			Value::Simple(Simple::False)
+		}
 	}
 }

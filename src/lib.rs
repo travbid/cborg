@@ -8,6 +8,7 @@ use std::error;
 pub use value::FromValue;
 pub use value::KeyVal;
 pub use value::Simple;
+pub use value::ToValue;
 pub use value::Value;
 pub use value::ValueInto;
 
@@ -352,9 +353,18 @@ where
 	Ok(T::from_value(v))
 }
 
+pub fn encode<V>(v: V) -> Vec<u8>
+where
+	Value: From<V>, {
+	Value::from(v).encode()
+}
+
+pub fn encode_dyn(v: &dyn ToValue) -> Vec<u8> { v.to_value().encode() }
+
 #[cfg(test)]
 mod tests {
 	use crate::KeyVal;
+	use crate::ToValue;
 	use crate::Value;
 	use crate::ValueInto;
 	use core::fmt::Write;
@@ -499,6 +509,11 @@ mod tests {
 
 	#[test]
 	fn encode_test() {
+		let utf8_key = "utf8string";
+		let utf8_val = "你好，世界 - hello, world";
+		let long_key = "long string";
+		let long_val = "This line is greater than 256 characters to test if lengths are encoded correctly after the major. This line is greater than 256 characters to test if lengths are encoded correctly after the major. This line is greater than 256 characters to test if lengths are encoded correctly after the major.";
+
 		let data = Value::Map(vec![
 			KeyVal {
 				key: Value::Unsigned(555),
@@ -512,12 +527,12 @@ mod tests {
 						val: Value::ByteString(vec![1, 2, 3, 4, 5]),
 					},
 					KeyVal {
-						key: Value::Utf8String(String::from("utf8string")),
-						val: Value::Utf8String(String::from("你好，世界 - hello, world")),
+						key: Value::Utf8String(utf8_key.to_string()),
+						val: Value::Utf8String(utf8_val.to_string()),
 					},
 					KeyVal {
-						key: Value::Utf8String(String::from("long string")),
-						val: Value::Utf8String(String::from("This line is greater than 256 characters to test if lengths are encoded correctly after the major. This line is greater than 256 characters to test if lengths are encoded correctly after the major. This line is greater than 256 characters to test if lengths are encoded correctly after the major.")),
+						key: Value::Utf8String(long_key.to_string()),
+						val: Value::Utf8String(long_val.to_string()),
 					},
 					KeyVal {
 						key: Value::Utf8String(String::from("unsigned")),
@@ -543,14 +558,59 @@ mod tests {
 		let bytes: Vec<u8> = data.encode();
 		for i in 0..125 {
 			if bytes[i] != TEST_DATA_DEFINITE[i] {
-				println!(
-					"mismatch at pos {}: {} : {}",
-					i, TEST_DATA_DEFINITE[i], bytes[i]
-				);
+				println!("mismatch at pos {}: {} : {}", i, TEST_DATA_DEFINITE[i], bytes[i]);
 			}
 		}
 
 		assert_eq!(TEST_DATA_DEFINITE.to_vec(), bytes);
+
+		let mut data = HashMap::new();
+
+		let mut inner555 = HashMap::new();
+		inner555.insert(utf8_key, utf8_val);
+		inner555.insert("second", "two");
+
+		let mut inner777 = HashMap::new();
+		inner777.insert("third", "three");
+
+		data.insert(555, inner555);
+		data.insert(777, inner777);
+
+		let cbor1 = data.to_value().encode();
+		let decoded: HashMap<u32, HashMap<String, String>> = match crate::decode_to(&cbor1){
+			Ok(x) => match x {
+				Some(x) => x,
+				None => {
+					println!("Could not unmarshal cbor1 into dictionary");
+					panic!();
+				}
+			},
+			Err(e) => {
+				println!("Error decoding cbor1: {}", e);
+				panic!();
+			}
+		};
+		assert_eq!(decoded[&555][utf8_key], utf8_val);
+		assert_eq!(decoded[&555]["second"], "two");
+		assert_eq!(decoded[&777]["third"], "three");
+
+		let cbor2 = crate::encode(data);
+		let decoded: HashMap<u32, HashMap<String, String>> = match crate::decode_to(&cbor2){
+			Ok(x) => match x {
+				Some(x) => x,
+				None => {
+					println!("Could not unmarshal cbor1 into dictionary");
+					panic!();
+				}
+			},
+			Err(e) => {
+				println!("Error decoding cbor1: {}", e);
+				panic!();
+			}
+		};
+		assert_eq!(decoded[&555][utf8_key], utf8_val);
+		assert_eq!(decoded[&555]["second"], "two");
+		assert_eq!(decoded[&777]["third"], "three");
 	}
 
 	#[test]
