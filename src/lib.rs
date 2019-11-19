@@ -344,6 +344,12 @@ where
 	Value::from(v).encode()
 }
 
+pub fn encode_ref<V>(v: &V) -> Vec<u8>
+where
+	V: ToValue, {
+	v.to_value().encode()
+}
+
 pub fn encode_dyn(v: &dyn ToValue) -> Vec<u8> { v.to_value().encode() }
 
 #[cfg(test)]
