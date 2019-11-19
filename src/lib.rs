@@ -338,17 +338,33 @@ where
 	Ok(T::from_value(v))
 }
 
+/// Encode a given object into CBOR.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+///```
+/// use std::collections::HashMap;
+/// let map: HashMap<u32, &str> = [
+///    (33, "thirty-three"),
+///    (44, "fourty-four"),
+///    (55, "fifty-five")
+/// ].iter().cloned().collect();
+/// let cbor_bytes: Vec<u8> = cborg::encode(map);
+/// ```
 pub fn encode<V>(v: V) -> Vec<u8>
 where
 	Value: From<V>, {
 	Value::from(v).encode()
 }
 
+/// Like `encode` but takes a reference.
 pub fn encode_ref<V>(v: &V) -> Vec<u8>
 where
 	V: ToValue, {
 	v.to_value().encode()
 }
 
+/// Like `encode` but takes a dynamic trait object.
 pub fn encode_dyn(v: &dyn ToValue) -> Vec<u8> { v.to_value().encode() }
-

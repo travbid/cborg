@@ -1,10 +1,10 @@
 # CBORG
 A [CBOR](https://cbor.io/) parser for Rust.
 
-Incomplete and built for my own use-case. You probably want [serde_cbor](https://crates.io/crates/serde_cbor)
+Incomplete and built for my own use-case. You may want [serde_cbor](https://crates.io/crates/serde_cbor)
 
 ## Usage
-`decode_to` will decode CBOR and unmarshal it into a given object:
+`decode_to()` will decode CBOR and unmarshal it into a given object:
 ```rust
 // Unmarshal Map
 use std::collections::HashMap;
@@ -21,6 +21,17 @@ let array: Vec<u32> = cborg::decode_to(bytes).unwrap().unwrap();
 assert_eq!(11, array[0]);
 assert_eq!(22, array[1]);
 assert_eq!(33, array[2]);
+```
+
+`encode()` will encode any object that has `From` implemented for `cborg::Value`:
+```rust
+use std::collections::HashMap;
+let map: HashMap<u32, &str> = [
+   (33, "thirty-three"),
+   (44, "fourty-four"),
+	(55, "fifty-five")
+].iter().cloned().collect();
+let cbor_bytes: Vec<u8> = cborg::encode(map);
 ```
 
 [![pipeline status](https://gitlab.com/travbid/cborg/badges/master/pipeline.svg)](https://gitlab.com/travbid/cborg/commits/master)
