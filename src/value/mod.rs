@@ -755,8 +755,7 @@ where
 
 impl<K, V, S> From<HashMap<K, V, S>> for Value
 where
-	Value: From<K>,
-	Value: From<V>,
+	Value: From<K> + From<V>,
 {
 	fn from(map: HashMap<K, V, S>) -> Self {
 		let mut v = Vec::<KeyVal>::new();
@@ -773,8 +772,7 @@ where
 
 impl<K, V> From<BTreeMap<K, V>> for Value
 where
-	Value: From<K>,
-	Value: From<V>,
+	Value: From<K> + From<V>,
 {
 	fn from(map: BTreeMap<K, V>) -> Self {
 		let mut v = Vec::<KeyVal>::new();
@@ -789,7 +787,7 @@ where
 	}
 }
 impl From<f32> for Value {
-	fn from(i: f32) -> Value { Value::Float(i as f64) }
+	fn from(i: f32) -> Value { Value::Float(f64::from(i)) }
 }
 impl From<f64> for Value {
 	fn from(i: f64) -> Value { Value::Float(i) }
